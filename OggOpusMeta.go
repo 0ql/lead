@@ -1,4 +1,4 @@
-package main
+package OggOpusMeta 
 
 import (
 	"encoding/binary"
