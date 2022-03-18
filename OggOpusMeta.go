@@ -178,7 +178,7 @@ func readOpusPackets(data Added_calc_data) {
 }
 
 func main() {
-	f, err := os.ReadFile("./gimme.opus")
+	f, err := os.ReadFile("./example.opus")
 	check(err)
 
 	dec = Decoder{
