@@ -87,9 +87,9 @@ Reads the Ogg page information into OggHeader
 Further calculates useful information into Added_calc_data
 */
 func (meta *OggOpusMeta) ReadOggHeader(pre_skip []byte) (OggHeader, Added_calc_data) {
-	dec := meta.buffer
+	dec := &meta.buffer
 
-	oggHeader := OggHeader{
+	oggHeader := &OggHeader{
 		capture_pattern:          dec.Read(4),
 		stream_structure_version: dec.Read(1),
 		header_type:              dec.Read(1),
@@ -101,13 +101,10 @@ func (meta *OggOpusMeta) ReadOggHeader(pre_skip []byte) (OggHeader, Added_calc_d
 	}
 
 	oggHeader.lacing_table = dec.Read(int(oggHeader.page_segments[0]))
-	var added_calc_data Added_calc_data
+	var added_calc_data Added_calc_data = Added_calc_data{}
 
 	if pre_skip != nil {
-		added_calc_data = Added_calc_data{
-			pcm_sample_position: int(binary.LittleEndian.Uint64(oggHeader.granule_position) - uint64(binary.LittleEndian.Uint16(pre_skip))),
-		}
-
+		added_calc_data.pcm_sample_position = int(binary.LittleEndian.Uint64(oggHeader.granule_position) - uint64(binary.LittleEndian.Uint16(pre_skip)))
 		added_calc_data.playback_time = added_calc_data.pcm_sample_position / 48000
 	}
 
@@ -129,7 +126,7 @@ func (meta *OggOpusMeta) ReadOggHeader(pre_skip []byte) (OggHeader, Added_calc_d
 
 	meta.total_opus_packet_count += added_calc_data.number_of_packets
 
-	return oggHeader, added_calc_data
+	return *oggHeader, added_calc_data
 }
 
 func (meta *OggOpusMeta) ReadOpusHead() OpusHead {
@@ -142,7 +139,7 @@ func (meta *OggOpusMeta) ReadOpusHead() OpusHead {
 	6)		this iteration's user comment = read a UTF-8 vector as [length] octets
 		 }
 	*/
-	dec := meta.buffer
+	dec := &meta.buffer
 
 	opusHead := OpusHead{
 		opus_head:                      dec.Read(8),
@@ -158,12 +155,14 @@ func (meta *OggOpusMeta) ReadOpusHead() OpusHead {
 }
 
 func (meta *OggOpusMeta) ReadOpusTags() OpusTags {
-	dec := meta.buffer
+	dec := &meta.buffer
+
 	opusTags := OpusTags{}
 	opusTags.opus_tags = dec.Read(8)
 	opusTags.vendor_string_length = dec.Read(4)
 	opusTags.vendor_string = dec.Read(int(binary.LittleEndian.Uint32(opusTags.vendor_string_length)))
 	opusTags.metadata_string_length = dec.Read(4)
+	fmt.Printf("%+v\n", opusTags)
 	n := binary.LittleEndian.Uint32(opusTags.metadata_string_length)
 	for i := uint32(0); i < n; i++ {
 		length := dec.Read(4)
@@ -176,7 +175,7 @@ func (meta *OggOpusMeta) ReadOpusTags() OpusTags {
 Returns an array of raw Opus Packets
 */
 func (meta *OggOpusMeta) ReadOpusPackets(data Added_calc_data) [][]byte {
-	dec := meta.buffer
+	dec := &meta.buffer
 
 	packets := [][]byte{}
 	for _, length := range data.packet_lengths {
@@ -197,13 +196,23 @@ func example() {
 	decoder := CreateDecoder(f)
 
 	oggHeader1, _ := decoder.ReadOggHeader(nil)
+	fmt.Printf("\nOggHeader: %+v\n", oggHeader1)
+
 	opusHead := decoder.ReadOpusHead()
+	fmt.Printf("\nOpusHead: %+v\n", opusHead)
+
 	oggHeader2, _ := decoder.ReadOggHeader(nil)
+	fmt.Printf("\nOggHeader: %+v\n", oggHeader2)
+
 	opusTags := decoder.ReadOpusTags()
+	fmt.Printf("\nOpusTags: %+v\n", opusTags)
+
 	oggHeader3, addedData1 := decoder.ReadOggHeader(opusHead.pre_skip)
-	decoder.ReadOpusPackets(addedData1)
-	oggHeader4, addedData2 := decoder.ReadOggHeader(opusHead.pre_skip)
-	decoder.ReadOpusPackets(addedData2)
+	fmt.Printf("\nOggHeader: %+v\n", oggHeader3)
+	fmt.Printf("Added Data: %+v\n", addedData1)
+
+	data := decoder.ReadOpusPackets(addedData1)
+	fmt.Println("Opus Packets: ", data)
 
 	eos := false
 	for eos == false {
@@ -214,14 +223,6 @@ func example() {
 		decoder.ReadOpusPackets(data)
 	}
 
-	fmt.Printf("%+v\n", oggHeader1)
-	fmt.Printf("%+v\n", opusHead)
-	fmt.Printf("%+v\n", oggHeader2)
-	fmt.Printf("%+v\n", opusTags)
-	fmt.Printf("%+v\n", oggHeader3)
-	fmt.Printf("%+v\n", addedData1)
-	fmt.Printf("%+v\n", oggHeader4)
-	fmt.Printf("%+v\n", addedData2)
 	fmt.Println(decoder.total_opus_packet_count)
 }
 
