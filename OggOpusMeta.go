@@ -186,7 +186,7 @@ func (meta *OggOpusMeta) ReadOpusPackets(data Added_calc_data) {
 	fmt.Println(tocs)
 }
 
-func main() {
+func example() {
 	f, err := os.ReadFile("./example.opus")
 	check(err)
 
@@ -219,4 +219,8 @@ func main() {
 	fmt.Printf("%+v\n", oggHeader4)
 	fmt.Printf("%+v\n", addedData2)
 	fmt.Println(totalPackets)
+}
+
+func main() {
+	example()
 }
