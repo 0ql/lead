@@ -44,7 +44,6 @@ type Added_calc_data struct {
 	packet_lengths      []int
 }
 
-
 type OpusHead struct {
 	opus_head                      []byte // Ascii "OpusHead"
 	version                        []byte // 0x01 for this spec
@@ -56,7 +55,6 @@ type OpusHead struct {
 	optional_channel_mapping_table []byte // I'm ignoring it as it's usually empty
 }
 
-
 type OpusTags struct {
 	opus_tags              []byte // Ascii "OpusTags"
 	vendor_string_length   []byte // (always present) 4-byte little-endian length field, followed by length bytes of UTF-8 vendor string
@@ -66,40 +64,40 @@ type OpusTags struct {
 }
 
 type OggOpusMeta struct {
-	opusHead OpusHead
-	opusTags OpusTags
+	opusHead                OpusHead
+	opusTags                OpusTags
 	total_opus_packet_count int
-	buffer   ByteReader
+	buffer                  ByteReader
 }
 
 func CreateDecoder(file []byte) OggOpusMeta {
 	return OggOpusMeta{
-		opusHead: OpusHead{},
-		opusTags: OpusTags{},
+		opusHead:                OpusHead{},
+		opusTags:                OpusTags{},
 		total_opus_packet_count: 0,
 		buffer: ByteReader{
 			Position: 0,
-			Buf: file,
+			Buf:      file,
 		},
 	}
 }
 
 /**
-	Reads the Ogg page information into OggHeader
-	Further calculates useful information into Added_calc_data
+Reads the Ogg page information into OggHeader
+Further calculates useful information into Added_calc_data
 */
 func (meta *OggOpusMeta) ReadOggHeader(pre_skip []byte) (OggHeader, Added_calc_data) {
 	dec := meta.buffer
 
 	oggHeader := OggHeader{
 		capture_pattern:          dec.Read(4),
-		stream_structure_version: dec.Read(1), 
-		header_type:              dec.Read(1), 
+		stream_structure_version: dec.Read(1),
+		header_type:              dec.Read(1),
 		granule_position:         dec.Read(8),
 		bitstream_serial_number:  dec.Read(4),
 		page_sequence_number:     dec.Read(4),
 		checksum:                 dec.Read(4),
-		page_segments:            dec.Read(1), 
+		page_segments:            dec.Read(1),
 	}
 
 	oggHeader.lacing_table = dec.Read(int(oggHeader.page_segments[0]))
@@ -136,25 +134,24 @@ func (meta *OggOpusMeta) ReadOggHeader(pre_skip []byte) (OggHeader, Added_calc_d
 
 func (meta *OggOpusMeta) ReadOpusHead() OpusHead {
 	/**
-		1) [vendor_length] = read an unsigned integer of 32 bits
-		2) [vendor_string] = read a UTF-8 vector as [vendor_length] octets
-		3) [user_comment_list_length] = read an unsigned integer of 32 bits
-		4) iterate [user_comment_list_length] times {
-		5) 		[length] = read an unsigned integer of 32 bits
-		6)		this iteration's user comment = read a UTF-8 vector as [length] octets
-			 }
+	1) [vendor_length] = read an unsigned integer of 32 bits
+	2) [vendor_string] = read a UTF-8 vector as [vendor_length] octets
+	3) [user_comment_list_length] = read an unsigned integer of 32 bits
+	4) iterate [user_comment_list_length] times {
+	5) 		[length] = read an unsigned integer of 32 bits
+	6)		this iteration's user comment = read a UTF-8 vector as [length] octets
+		 }
 	*/
-
 	dec := meta.buffer
 
 	opusHead := OpusHead{
-		opus_head:                  dec.Read(8), 
-		version:                    dec.Read(1), 
-		channel_count:              dec.Read(1),
-		pre_skip:                   dec.Read(2), 
-		original_input_sample_rate: dec.Read(4), 
-		output_gain:                dec.Read(2), 
-		channel_map:                dec.Read(1), 
+		opus_head:                      dec.Read(8),
+		version:                        dec.Read(1),
+		channel_count:                  dec.Read(1),
+		pre_skip:                       dec.Read(2),
+		original_input_sample_rate:     dec.Read(4),
+		output_gain:                    dec.Read(2),
+		channel_map:                    dec.Read(1),
 		optional_channel_mapping_table: nil,
 	}
 	return opusHead
@@ -163,10 +160,10 @@ func (meta *OggOpusMeta) ReadOpusHead() OpusHead {
 func (meta *OggOpusMeta) ReadOpusTags() OpusTags {
 	dec := meta.buffer
 	opusTags := OpusTags{}
-	opusTags.opus_tags = dec.Read(8)            
-	opusTags.vendor_string_length = dec.Read(4) 
+	opusTags.opus_tags = dec.Read(8)
+	opusTags.vendor_string_length = dec.Read(4)
 	opusTags.vendor_string = dec.Read(int(binary.LittleEndian.Uint32(opusTags.vendor_string_length)))
-	opusTags.metadata_string_length = dec.Read(4) 
+	opusTags.metadata_string_length = dec.Read(4)
 	n := binary.LittleEndian.Uint32(opusTags.metadata_string_length)
 	for i := uint32(0); i < n; i++ {
 		length := dec.Read(4)
@@ -176,7 +173,7 @@ func (meta *OggOpusMeta) ReadOpusTags() OpusTags {
 }
 
 /**
-	Returns an array of raw Opus Packets
+Returns an array of raw Opus Packets
 */
 func (meta *OggOpusMeta) ReadOpusPackets(data Added_calc_data) [][]byte {
 	dec := meta.buffer
