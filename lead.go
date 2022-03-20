@@ -1,4 +1,4 @@
-package OggOpusMeta
+package lead
 
 import (
 	"encoding/binary"
@@ -24,26 +24,6 @@ func sum(array []int) int {
 	return result
 }
 
-type OggHeader struct {
-	capture_pattern          []byte // Ascii "OggS"
-	stream_structure_version []byte // Version must be 0
-	header_type              []byte // 0x01 Continuation | 0x02 BOS | 0x04 EOS
-	granule_position         []byte
-	bitstream_serial_number  []byte
-	page_sequence_number     []byte
-	checksum                 []byte
-	page_segments            []byte // number of segments (aka. Opus Packets) in the lacing table
-	lacing_table             []byte
-}
-
-type Added_calc_data struct {
-	pcm_sample_position int
-	playback_time       int
-	total_body_length   int
-	number_of_packets   int
-	packet_lengths      []int
-}
-
 type OpusHead struct {
 	opus_head                      []byte // Ascii "OpusHead"
 	version                        []byte // 0x01 for this spec
@@ -63,73 +43,30 @@ type OpusTags struct {
 	metadata_strings       []byte
 }
 
-type OggOpusMeta struct {
+type Decoder struct {
 	opusHead                OpusHead
 	opusTags                OpusTags
 	total_opus_packet_count int
 	buffer                  ByteReader
+	ogg                     Ogg
 }
 
-func CreateDecoder(file []byte) OggOpusMeta {
-	return OggOpusMeta{
+func CreateDecoder(file []byte) *Decoder {
+	dec := &Decoder{
 		opusHead:                OpusHead{},
 		opusTags:                OpusTags{},
+		ogg:                     Ogg{},
 		total_opus_packet_count: 0,
 		buffer: ByteReader{
 			Position: 0,
 			Buf:      file,
 		},
 	}
+	dec.ogg.decoder = dec
+	return dec
 }
 
-/**
-Reads the Ogg page information into OggHeader
-Further calculates useful information into Added_calc_data
-*/
-func (meta *OggOpusMeta) ReadOggHeader(pre_skip []byte) (OggHeader, Added_calc_data) {
-	dec := &meta.buffer
-
-	oggHeader := &OggHeader{
-		capture_pattern:          dec.Read(4),
-		stream_structure_version: dec.Read(1),
-		header_type:              dec.Read(1),
-		granule_position:         dec.Read(8),
-		bitstream_serial_number:  dec.Read(4),
-		page_sequence_number:     dec.Read(4),
-		checksum:                 dec.Read(4),
-		page_segments:            dec.Read(1),
-	}
-
-	oggHeader.lacing_table = dec.Read(int(oggHeader.page_segments[0]))
-	var added_calc_data Added_calc_data = Added_calc_data{}
-
-	if pre_skip != nil {
-		added_calc_data.pcm_sample_position = int(binary.LittleEndian.Uint64(oggHeader.granule_position) - uint64(binary.LittleEndian.Uint16(pre_skip)))
-		added_calc_data.playback_time = added_calc_data.pcm_sample_position / 48000
-	}
-
-	i := 0
-	packetLengths := []int{}
-	for i < len(oggHeader.lacing_table) {
-		packetLength := 0
-		packetLength += int(oggHeader.lacing_table[i])
-		for oggHeader.lacing_table[i] == 255 {
-			i++
-			packetLength += int(oggHeader.lacing_table[i])
-		}
-		packetLengths = append(packetLengths, packetLength)
-		i++
-	}
-	added_calc_data.total_body_length = sum(packetLengths)
-	added_calc_data.number_of_packets = len(packetLengths)
-	added_calc_data.packet_lengths = packetLengths
-
-	meta.total_opus_packet_count += added_calc_data.number_of_packets
-
-	return *oggHeader, added_calc_data
-}
-
-func (meta *OggOpusMeta) ReadOpusHead() OpusHead {
+func (meta *Decoder) ReadOpusHead() OpusHead {
 	/**
 	1) [vendor_length] = read an unsigned integer of 32 bits
 	2) [vendor_string] = read a UTF-8 vector as [vendor_length] octets
@@ -154,7 +91,7 @@ func (meta *OggOpusMeta) ReadOpusHead() OpusHead {
 	return opusHead
 }
 
-func (meta *OggOpusMeta) ReadOpusTags() OpusTags {
+func (meta *Decoder) ReadOpusTags() OpusTags {
 	dec := &meta.buffer
 
 	opusTags := OpusTags{}
@@ -174,7 +111,7 @@ func (meta *OggOpusMeta) ReadOpusTags() OpusTags {
 /**
 Returns an array of raw Opus Packets
 */
-func (meta *OggOpusMeta) ReadOpusPackets(data Added_calc_data) [][]byte {
+func (meta *Decoder) ReadOpusPackets(data Added_calc_data) [][]byte {
 	dec := &meta.buffer
 
 	packets := [][]byte{}
@@ -195,19 +132,19 @@ func example() {
 
 	decoder := CreateDecoder(f)
 
-	oggHeader1, _ := decoder.ReadOggHeader(nil)
+	oggHeader1, _ := decoder.ogg.ReadOggHeader(nil)
 	fmt.Printf("\nOggHeader: %+v\n", oggHeader1)
 
 	opusHead := decoder.ReadOpusHead()
 	fmt.Printf("\nOpusHead: %+v\n", opusHead)
 
-	oggHeader2, _ := decoder.ReadOggHeader(nil)
+	oggHeader2, _ := decoder.ogg.ReadOggHeader(nil)
 	fmt.Printf("\nOggHeader: %+v\n", oggHeader2)
 
 	opusTags := decoder.ReadOpusTags()
 	fmt.Printf("\nOpusTags: %+v\n", opusTags)
 
-	oggHeader3, addedData1 := decoder.ReadOggHeader(opusHead.pre_skip)
+	oggHeader3, addedData1 := decoder.ogg.ReadOggHeader(opusHead.pre_skip)
 	fmt.Printf("\nOggHeader: %+v\n", oggHeader3)
 	fmt.Printf("Added Data: %+v\n", addedData1)
 
@@ -216,7 +153,7 @@ func example() {
 
 	eos := false
 	for eos == false {
-		oggHeader, data := decoder.ReadOggHeader(opusHead.pre_skip)
+		oggHeader, data := decoder.ogg.ReadOggHeader(opusHead.pre_skip)
 		if oggHeader.header_type[0] == 4 { // check for end of stream (EOS)
 			eos = true
 		}

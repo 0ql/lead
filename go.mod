@@ -1,3 +1,3 @@
-module github.com/0ql/OggOpusMeta
+module github.com/0ql/lead
 
 go 1.18
