@@ -1,4 +1,4 @@
-package lead
+package main
 
 import (
 	"encoding/binary"
@@ -49,6 +49,7 @@ type Decoder struct {
 	total_opus_packet_count int
 	buffer                  ByteReader
 	ogg                     Ogg
+	webm                    Webm
 }
 
 func CreateDecoder(file []byte) *Decoder {
@@ -56,6 +57,7 @@ func CreateDecoder(file []byte) *Decoder {
 		opusHead:                OpusHead{},
 		opusTags:                OpusTags{},
 		ogg:                     Ogg{},
+		webm:                    Webm{},
 		total_opus_packet_count: 0,
 		buffer: ByteReader{
 			Position: 0,
@@ -63,6 +65,7 @@ func CreateDecoder(file []byte) *Decoder {
 		},
 	}
 	dec.ogg.decoder = dec
+	dec.webm.decoder = dec
 	return dec
 }
 
@@ -124,7 +127,7 @@ func (meta *Decoder) ReadOpusPackets(data Added_calc_data) [][]byte {
 	return packets
 }
 
-func example() {
+func exampleOgg() {
 	f, err := os.ReadFile("./example.opus")
 	if err != nil {
 		panic(err)
@@ -163,6 +166,19 @@ func example() {
 	fmt.Println(decoder.total_opus_packet_count)
 }
 
+func exampleWebM() {
+	file, err := os.ReadFile("./test-opus.webm")
+	if err != nil {
+		panic(err)
+	}
+
+	decoder := CreateDecoder(file)
+
+	decoder.webm.ReadEBML()
+
+	fmt.Println(file[:100])
+}
+
 func main() {
-	example()
+	exampleWebM()
 }

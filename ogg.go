@@ -1,4 +1,4 @@
-package lead
+package main
 
 import "encoding/binary"
 
